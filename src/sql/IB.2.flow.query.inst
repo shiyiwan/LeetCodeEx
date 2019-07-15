@@ -1,0 +1,70 @@
+/*
+流程引擎：查询某人全部审批内容
+*/
+
+SELECT p.business_type AS "业务类型"
+       ,p.project_id    AS "项目ID"
+       ,p.project_code  AS "项目代码"
+       ,p.project_name  AS "项目名称"
+       ,fr.stage_name   AS "流程模板"
+       ,fr.task_title   AS "标题"
+       ,s.proc_inst_id  AS "流程ID"
+       --,tpi.start_user_id 
+       ,(SELECT o.organization_name
+          FROM ouser.t_xtgl_organization o, ouser.t_xtgl_user_organization uo
+         WHERE o.organization_id = uo.team_id0
+           AND uo.user_id = tpi.start_user_id
+           AND rownum <= 1) AS "发起人单位"
+       ,(SELECT login_id
+          FROM ouser.t_xtgl_user u
+         WHERE u.user_id = tpi.start_user_id
+           AND rownum <= 1) AS "发起人HRID"
+       ,(SELECT user_name
+          FROM ouser.t_xtgl_user u
+         WHERE u.user_id = tpi.start_user_id
+           AND rownum <= 1) AS "发起人名称"
+       ,to_char(tpi.start_time, 'yyyymmdd HH24:MI:SS') AS "发起时间"
+       ,CASE tpi.inst_status
+         WHEN '-1' THEN
+          '删除'
+         WHEN '1' THEN
+          '在用'
+         WHEN '2' THEN
+          '挂起'
+         WHEN '3' THEN
+          '结束'
+       END AS "流程状态"
+       ,CASE tpi.ending_type
+         WHEN '1' THEN
+          '正常结束'
+         WHEN '2' THEN
+          '撤销结束'
+         WHEN '3' THEN
+          '提前终止'
+       END AS "流程结束类型"
+       ,s.task_id AS "任务ID"
+       ,s.task_name AS "任务名称"
+       ,s.suggestion_id AS "审批ID"
+       -- ,s.user_id
+       ,(SELECT login_id
+          FROM ouser.t_xtgl_user u
+         WHERE u.user_id = s.user_id
+           AND rownum <= 1) AS "审批人HRID"
+       ,(SELECT user_name
+          FROM ouser.t_xtgl_user u
+         WHERE u.user_id = s.user_id
+           AND rownum <= 1) AS "审批人名称"
+       ,s.suggest_content AS "审批内容"
+       ,to_char(s.suggest_time, 'yyyymmdd HH24:MI:SS') AS "审批时间"
+  FROM bibuser.t_flow_core_ru_suggest  s
+      ,bibuser.t_pm_projourinst        pi
+      ,bibuser.v_pm_projectinfo        p
+      ,bibuser.t_flow_core_ru_procinst tpi
+      ,bibuser.t_flow_rutaskrela       fr
+ WHERE s.proc_inst_id = pi.inst_id
+   AND p.project_id = pi.project_id
+   AND pi.inst_id = tpi.proc_inst_id
+   AND tpi.proc_inst_id = fr.inst_id
+   AND s.user_id = ?
+   AND p.business_type IN (1, 2)
+   AND s.suggest_time >= to_date('20190101', 'yyyymmdd');
